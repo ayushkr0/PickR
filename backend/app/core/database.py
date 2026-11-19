@@ -14,7 +14,7 @@ def get_engine():
     if not settings.database_url:
         return None
     # asyncpg driver for async postgres
-    url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://")
+    url = settings.database_url.strip().replace("postgresql://", "postgresql+asyncpg://")
     return create_async_engine(url, echo=False)
 
 
