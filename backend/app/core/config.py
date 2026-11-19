@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "pickr-dev-secret-change-in-prod"
     jwt_expiry_hours: int = 72
 
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001", "https://pick-r.vercel.app"]
     environment: str = "development"
 
     model_config = {"env_file": str(_BACKEND_DIR / ".env"), "extra": "ignore"}
