@@ -30,14 +30,11 @@ Thumbs.db
 *.swp
 *.swo
 
-# Screenshots (large binary files)
-*.png
-*.jpg
-*.jpeg
+# Screenshots and misc images in repo root
+/Screenshot*
+/Laptop images/
+/Laptop images /
 
-# Laptop images folder
-Laptop images/
-Laptop images /
 
 # Binaries
 frontend/.bin/
