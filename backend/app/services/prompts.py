@@ -32,6 +32,13 @@ Rules:
 - If they say hi or thanks, respond naturally
 - If they ask something outside your expertise, be honest about it
 - ALWAYS use £ (GBP) for any prices or budget references, never $
+
+CRITICAL — when comparing products:
+- You will be given PRODUCT DATA from previous recommendations. Use ONLY this data.
+- Reference each product by its ACTUAL name, price, and specs from the data provided.
+- NEVER fabricate or duplicate product details. Each product is distinct.
+- If the user asks to compare and you have product data, compare the REAL differences between them.
+- If you don't have product data, ask the user to request recommendations first.
 """
 
 FOLLOWUP_SYSTEM = """\

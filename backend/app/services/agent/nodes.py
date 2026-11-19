@@ -72,7 +72,17 @@ async def extract_intent(state: AgentState) -> dict:
 
 async def converse(state: AgentState) -> dict:
     llm = _get_sonnet()
-    messages = [SystemMessage(content=CONVERSATION_SYSTEM)] + _sanitize_messages(state["messages"])
+
+    product_context = ""
+    products = state.get("products")
+    if products:
+        product_context = "\n\nPreviously recommended products (use this data for comparisons):\n" + "\n".join(
+            f"- {p.name} by {p.brand}: £{p.price} | Pros: {', '.join(p.pros)} | Cons: {', '.join(p.cons)} | Summary: {p.summary or 'N/A'}"
+            for p in products
+        )
+
+    system = CONVERSATION_SYSTEM + product_context
+    messages = [SystemMessage(content=system)] + _sanitize_messages(state["messages"])
     response = await llm.ainvoke(messages)
     return {"messages": [response]}
 

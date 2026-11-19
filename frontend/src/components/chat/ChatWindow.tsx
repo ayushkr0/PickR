@@ -19,27 +19,30 @@ import { useTheme } from "@/lib/theme";
 import { useToast } from "@/components/ui/Toast";
 import { fetchSessionMessages } from "@/lib/sessions";
 
-// Quick reply suggestions based on conversation stage
-const QUICK_REPLIES: Record<string, string[]> = {
-  follow_up: [
-    "I'm a student",
-    "For professional work",
-    "Under £500",
-    "Under £1000",
-    "No budget limit",
-  ],
-  recommendation: [
-    "Show me cheaper options",
-    "Anything more premium?",
-    "Compare the top two",
-    "Start over with new criteria",
-  ],
-  conversation: [
-    "Tell me more",
-    "What would you recommend?",
-    "Thanks!",
-  ],
-};
+function getContextualReplies(messages: MessageType[], stage?: string): string[] {
+  const userTexts = messages.filter((m) => m.role === "user").map((m) => m.content.toLowerCase());
+  const allText = userTexts.join(" ");
+  const hasCategory = /laptop|headphone|camera|phone|tablet|monitor/.test(allText);
+  const hasBudget = /[£$€]\s*[\d,]+|[\d,]+\s*(?:pounds|dollars)|under\s+\d|budget/.test(allText);
+  const hasUseCase = /gaming|work|student|professional|music|photo|video|travel|school|office|streaming|editing/.test(allText);
+
+  if (stage === "follow_up") {
+    const suggestions: string[] = [];
+    if (!hasBudget) suggestions.push("Under £500", "Under £1000", "No budget limit");
+    if (!hasUseCase) {
+      if (/laptop/.test(allText)) suggestions.push("For gaming", "For work", "For school");
+      else if (/headphone/.test(allText)) suggestions.push("For music", "For gaming", "For commuting");
+      else if (/camera/.test(allText)) suggestions.push("For photography", "For vlogging", "For travel");
+      else suggestions.push("For gaming", "For work", "For school");
+    }
+    if (hasCategory && hasBudget && hasUseCase) suggestions.push("That covers it, show me options!");
+    return suggestions.length > 0 ? suggestions.slice(0, 4) : ["Show me what you've got!"];
+  }
+  if (stage === "recommendation") {
+    return ["Show me cheaper options", "Anything more premium?", "Compare the top two", "Start over"];
+  }
+  return ["Tell me more", "What would you recommend?", "Thanks!"];
+}
 
 function ChatHeader({ onReset, onNewChat, onSignIn, onToggleSidebar }: { onReset: () => void; onNewChat: () => void; onSignIn: () => void; onToggleSidebar: () => void }) {
   const { theme, toggleTheme } = useTheme();
@@ -52,6 +55,16 @@ function ChatHeader({ onReset, onNewChat, onSignIn, onToggleSidebar }: { onReset
   return (
     <header className="flex items-center justify-between px-4 sm:px-6 py-3.5 shrink-0 border-b border-border bg-nav-bg backdrop-blur-xl sticky top-0 z-20">
       <div className="flex items-center gap-2.5">
+        {/* Mobile back button */}
+        <button
+          onClick={onReset}
+          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg-secondary text-text-muted hover:text-text-primary transition-colors cursor-pointer sm:hidden"
+          aria-label="Back to home"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
         {user && (
           <button
             onClick={onToggleSidebar}
@@ -105,8 +118,11 @@ function ChatHeader({ onReset, onNewChat, onSignIn, onToggleSidebar }: { onReset
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           onClick={onReset}
-          className="text-[11px] font-medium text-text-muted hover:text-text-primary transition-colors px-2.5 py-1.5 rounded-lg hover:bg-bg-secondary border border-transparent hover:border-border cursor-pointer hidden sm:block"
+          className="text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors px-2.5 py-1.5 rounded-lg hover:bg-bg-secondary border border-border hover:border-border-dark cursor-pointer hidden sm:flex items-center gap-1.5"
         >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
           Home
         </motion.button>
 
@@ -149,9 +165,8 @@ function ChatHeader({ onReset, onNewChat, onSignIn, onToggleSidebar }: { onReset
   );
 }
 
-// Quick reply suggestion chips
-function QuickReplies({ stage, onSelect, disabled }: { stage?: string; onSelect: (text: string) => void; disabled: boolean }) {
-  const suggestions = QUICK_REPLIES[stage || "conversation"] || QUICK_REPLIES.conversation;
+function QuickReplies({ messages, stage, onSelect, disabled }: { messages: MessageType[]; stage?: string; onSelect: (text: string) => void; disabled: boolean }) {
+  const suggestions = getContextualReplies(messages, stage);
 
   if (disabled) return null;
 
@@ -177,22 +192,73 @@ function QuickReplies({ stage, onSelect, disabled }: { stage?: string; onSelect:
 
 export default function ChatWindow() {
   const [messages, setMessages] = useState<MessageType[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try { return sessionStorage.getItem("pickr_session_id"); } catch { return null; }
+  });
   const [loading, setLoading] = useState(false);
   const [streamPhase, setStreamPhase] = useState<string | null>(null);
+  const [expectProducts, setExpectProducts] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasInteracted, setHasInteracted] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return sessionStorage.getItem("pickr_session_id") !== null; } catch { return false; }
+  });
   const [whyLoading, setWhyLoading] = useState<string | null>(null);
   const [whyModal, setWhyModal] = useState<{ product: Product; explanation: string | null } | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const whyCacheRef = useRef<Map<string, string>>(new Map());
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUp = useRef(false);
   const { toast } = useToast();
 
+  // Persist sessionId to sessionStorage
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    try {
+      if (sessionId) sessionStorage.setItem("pickr_session_id", sessionId);
+      else sessionStorage.removeItem("pickr_session_id");
+    } catch {}
+  }, [sessionId]);
+
+  // Restore session on mount
+  useEffect(() => {
+    const sid = (() => { try { return sessionStorage.getItem("pickr_session_id"); } catch { return null; } })();
+    if (sid && messages.length === 0 && hasInteracted) {
+      setRestoring(true);
+      fetchSessionMessages(sid)
+        .then((data) => {
+          const loaded: MessageType[] = data.messages.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          }));
+          setMessages([WELCOME_MESSAGE, ...loaded]);
+        })
+        .catch(() => {
+          try { sessionStorage.removeItem("pickr_session_id"); } catch {}
+          setSessionId(null);
+          setHasInteracted(false);
+        })
+        .finally(() => setRestoring(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Smart scroll: only auto-scroll when user is near the bottom
+  useEffect(() => {
+    if (!userScrolledUp.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, loading]);
+
+  function handleScroll() {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 150;
+    userScrolledUp.current = !nearBottom;
+  }
 
   const WELCOME_MESSAGE: MessageType = {
     role: "assistant",
@@ -201,6 +267,8 @@ export default function ChatWindow() {
   };
 
   async function handleSend(text: string) {
+    userScrolledUp.current = false;
+
     if (!hasInteracted) {
       setHasInteracted(true);
       if (!text.trim()) {
@@ -212,6 +280,7 @@ export default function ChatWindow() {
     if (!text.trim()) return;
 
     setError(null);
+    setExpectProducts(false);
     const userMsg: MessageType = { role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
@@ -238,6 +307,9 @@ export default function ChatWindow() {
         },
         onNode(node, status) {
           if (status === "completed") return;
+          if (node === "retrieve" || node === "recommend") {
+            setExpectProducts(true);
+          }
           const labels: Record<string, string> = {
             extract_intent: "Understanding your request...",
             retrieve: "Searching products...",
@@ -327,12 +399,14 @@ export default function ChatWindow() {
     setMessages([]);
     setError(null);
     setHasInteracted(false);
+    try { sessionStorage.removeItem("pickr_session_id"); } catch {}
   }
 
   async function handleNewChat() {
     setSessionId(null);
     setMessages([WELCOME_MESSAGE]);
     setError(null);
+    try { sessionStorage.removeItem("pickr_session_id"); } catch {}
   }
 
   async function handleSelectSession(sid: string) {
@@ -355,7 +429,17 @@ export default function ChatWindow() {
     return <LandingPage onStart={handleSend} />;
   }
 
-  // Get the last assistant message's stage for quick replies
+  if (restoring) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="flex items-center gap-3 text-text-muted text-sm">
+          <div className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+          Restoring your conversation...
+        </div>
+      </div>
+    );
+  }
+
   const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
   const lastStage = lastAssistantMsg?.stage;
   const showQuickReplies = !loading && messages.length > 0 && lastAssistantMsg;
@@ -378,7 +462,7 @@ export default function ChatWindow() {
       <div className="flex flex-col flex-1 min-w-0 max-w-3xl mx-auto w-full">
       <ChatHeader onReset={handleReset} onNewChat={handleNewChat} onSignIn={() => setAuthOpen(true)} onToggleSidebar={() => setSidebarOpen((v) => !v)} />
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-5">
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-5">
         <AnimatePresence mode="popLayout">
           {messages.map((msg, i) => (
             <motion.div
@@ -411,11 +495,11 @@ export default function ChatWindow() {
         {/* Quick reply chips */}
         <AnimatePresence>
           {showQuickReplies && (
-            <QuickReplies stage={lastStage} onSelect={handleSend} disabled={loading} />
+            <QuickReplies messages={messages} stage={lastStage} onSelect={handleSend} disabled={loading} />
           )}
         </AnimatePresence>
 
-        {/* Loading / typing indicator — only show when loading AND no tokens have arrived yet */}
+        {/* Loading / typing indicator */}
         <AnimatePresence>
           {loading && streamPhase && (
             <motion.div
@@ -436,7 +520,7 @@ export default function ChatWindow() {
                 </div>
               </div>
 
-              {messages.length >= 3 && (
+              {expectProducts && (
                 <div className="ml-11">
                   <ProductGridSkeleton />
                 </div>
@@ -463,7 +547,6 @@ export default function ChatWindow() {
               <button
                 onClick={() => {
                   setError(null);
-                  // Retry last message
                   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
                   if (lastUserMsg) {
                     setMessages((prev) => prev.slice(0, -1));
@@ -481,7 +564,7 @@ export default function ChatWindow() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="px-4 sm:px-6 pt-2 pb-5 shrink-0 bg-nav-bg backdrop-blur-xl border-t border-border">
+      <div className="px-4 sm:px-6 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shrink-0 bg-nav-bg backdrop-blur-xl border-t border-border">
         <ChatInput onSend={handleSend} disabled={loading} />
       </div>
 

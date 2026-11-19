@@ -14,6 +14,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     display_name: str | None = None
+    honeypot: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -35,6 +36,9 @@ class UserOut(BaseModel):
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    if body.honeypot:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Registration failed")
+
     if len(body.password) < 6:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password must be at least 6 characters")
 

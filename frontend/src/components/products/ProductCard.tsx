@@ -25,6 +25,7 @@ export default function ProductCard({ product, index = 0, isBestPick = false, on
   const saved = isProductSaved(product.id);
   const [imgError, setImgError] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [priceCtx, setPriceCtx] = useState<{ diff_pct: number; verdict: string } | null>(null);
 
   useEffect(() => {
@@ -47,15 +48,22 @@ export default function ProductCard({ product, index = 0, isBestPick = false, on
       }`}
     >
       {/* Image */}
-      <div className={`${isBestPick ? "h-40 p-6" : "h-28 p-4"} flex items-center justify-center relative overflow-hidden bg-white`}>
+      <div className={`${isBestPick ? "h-48 p-6" : "h-36 p-4"} flex items-center justify-center relative overflow-hidden bg-white`}>
         {product.image_url && !imgError ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={product.image_url}
-            alt={product.name}
-            className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-500"
-            onError={() => setImgError(true)}
-          />
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(true)}
+            className="h-full w-full cursor-zoom-in"
+            aria-label={`View ${product.name} image`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-500"
+              onError={() => setImgError(true)}
+            />
+          </button>
         ) : (
           <span className={`${isBestPick ? "text-5xl" : "text-3xl"} opacity-20 group-hover:scale-110 transition-transform duration-500`}>
             {CATEGORY_EMOJI[product.category] ?? "\uD83D\uDCE6"}
@@ -120,14 +128,14 @@ export default function ProductCard({ product, index = 0, isBestPick = false, on
 
         <div className="flex flex-wrap gap-1.5 text-[10px]">
           {product.pros.slice(0, 2).map((pro, i) => (
-            <span key={i} className="inline-flex items-center gap-1 text-green bg-green/[0.08] px-1.5 py-0.5 rounded">
-              <svg width="8" height="8" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" /></svg>
+            <span key={i} className="inline-flex items-center gap-1 text-green bg-green/[0.08] px-1.5 py-0.5 rounded max-w-[140px] truncate">
+              <svg width="8" height="8" viewBox="0 0 16 16" fill="currentColor" className="shrink-0"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" /></svg>
               {pro}
             </span>
           ))}
           {product.cons.slice(0, 1).map((con, i) => (
-            <span key={i} className="inline-flex items-center gap-1 text-red bg-red/[0.08] px-1.5 py-0.5 rounded">
-              <svg width="8" height="8" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" /></svg>
+            <span key={i} className="inline-flex items-center gap-1 text-red bg-red/[0.08] px-1.5 py-0.5 rounded max-w-[140px] truncate">
+              <svg width="8" height="8" viewBox="0 0 16 16" fill="currentColor" className="shrink-0"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" /></svg>
               {con}
             </span>
           ))}
@@ -154,6 +162,47 @@ export default function ProductCard({ product, index = 0, isBestPick = false, on
           )}
         </div>
       </div>
+      {/* Image Lightbox */}
+      <AnimatePresence>
+        {lightboxOpen && product.image_url && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+            onClick={() => setLightboxOpen(false)}
+            onKeyDown={(e) => { if (e.key === "Escape") setLightboxOpen(false); }}
+          >
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="relative max-w-2xl max-h-[80vh] w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={product.image_url}
+                alt={product.name}
+                className="w-full h-full object-contain rounded-xl"
+              />
+              <button
+                onClick={() => setLightboxOpen(false)}
+                className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors cursor-pointer"
+                aria-label="Close image"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+              <p className="text-center text-white/80 text-sm mt-3 font-medium">{product.name}</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

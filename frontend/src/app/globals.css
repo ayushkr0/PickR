@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /* ─── Pastel Minimal Design System ─── */
 
 :root {
-  --font-space: 'Space Grotesk', sans-serif;
+  --font-space: 'Inter', sans-serif;
   --font-dm: 'DM Sans', sans-serif;
 
   --bg-primary: #FAFBFE;

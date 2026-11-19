@@ -14,6 +14,7 @@ export default function AuthModal({ open, onClose }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [honeypot, setHoneypot] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -34,6 +35,7 @@ export default function AuthModal({ open, onClose }: Props) {
       setEmail("");
       setPassword("");
       setName("");
+      setHoneypot("");
     }
   }, [open, mode]);
 
@@ -45,7 +47,11 @@ export default function AuthModal({ open, onClose }: Props) {
       if (mode === "login") {
         await login(email, password);
       } else {
-        await register(email, password, name || undefined);
+        if (honeypot) {
+          onClose();
+          return;
+        }
+        await register(email, password, name || undefined, honeypot);
       }
       onClose();
     } catch (err) {
@@ -104,6 +110,18 @@ export default function AuthModal({ open, onClose }: Props) {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Your name (optional)"
                     className="mt-1 w-full px-3 py-2.5 text-sm bg-bg-secondary border border-border rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all"
+                  />
+                </div>
+              )}
+              {mode === "register" && (
+                <div className="absolute opacity-0 h-0 overflow-hidden" aria-hidden="true" tabIndex={-1}>
+                  <label>Website</label>
+                  <input
+                    type="text"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
                   />
                 </div>
               )}

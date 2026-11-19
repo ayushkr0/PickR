@@ -1,5 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import type { Product } from "@/types";
 import ProductCard from "./ProductCard";
+import ComparisonView from "@/components/wishlist/ComparisonView";
 
 interface Props {
   products: Product[];
@@ -8,6 +12,8 @@ interface Props {
 }
 
 export default function ProductGrid({ products, bestPickIndex = 0, onWhyThisPick }: Props) {
+  const [compareOpen, setCompareOpen] = useState(false);
+
   if (products.length === 0) return null;
 
   const bestPick = products[bestPickIndex];
@@ -47,6 +53,21 @@ export default function ProductGrid({ products, bestPickIndex = 0, onWhyThisPick
           </div>
         </div>
       )}
+
+      {/* Compare These button */}
+      {products.length >= 2 && (
+        <button
+          onClick={() => setCompareOpen(true)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-accent bg-accent-light hover:bg-accent/15 border border-accent/20 hover:border-accent/30 rounded-xl transition-all cursor-pointer active:scale-[0.98]"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+          </svg>
+          Compare These Products
+        </button>
+      )}
+
+      <ComparisonView open={compareOpen} onClose={() => setCompareOpen(false)} products={products} />
     </div>
   );
 }
