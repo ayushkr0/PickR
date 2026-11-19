@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: pickr-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_NAME
+        value: pickr-products
+      - key: DATABASE_URL
+        sync: false
+      - key: LANGCHAIN_TRACING_V2
+        value: "true"
+      - key: LANGCHAIN_API_KEY
+        sync: false
+      - key: LANGCHAIN_PROJECT
+        value: pickr
+      - key: CORS_ORIGINS
+        value: '["https://pickr.vercel.app"]'
+      - key: ENVIRONMENT
+        value: production

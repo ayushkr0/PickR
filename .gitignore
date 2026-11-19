@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+backend/venv/
+
+# Environment variables (contains API keys and secrets)
+.env
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Screenshots (large binary files)
+*.png
+*.jpg
+*.jpeg
+
+# Laptop images folder
+Laptop images/
+Laptop images /
+
+# Binaries
+frontend/.bin/
+
+# Claude internal
+.claude/
