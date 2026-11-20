@@ -77,10 +77,17 @@ async def converse(state: AgentState) -> dict:
     product_context = ""
     products = state.get("products")
     if products:
-        product_context = "\n\nPreviously recommended products (use this data for comparisons):\n" + "\n".join(
-            f"- {p.name} by {p.brand}: £{p.price} | Pros: {', '.join(p.pros)} | Cons: {', '.join(p.cons)} | Summary: {p.summary or 'N/A'}"
-            for p in products
-        )
+        product_lines = []
+        for i, p in enumerate(products):
+            specs_str = ", ".join(f"{k}: {v}" for k, v in (p.specs or {}).items()) if p.specs else "N/A"
+            label = " [BEST PICK]" if i == 0 else ""
+            product_lines.append(
+                f"- {p.name} by {p.brand}: £{p.price}{label}\n"
+                f"  Specs: {specs_str}\n"
+                f"  Pros: {', '.join(p.pros)} | Cons: {', '.join(p.cons)}\n"
+                f"  Summary: {p.summary or 'N/A'}"
+            )
+        product_context = "\n\nPreviously recommended products (use ONLY this data):\n" + "\n".join(product_lines)
 
     system = CONVERSATION_SYSTEM + product_context
     messages = [SystemMessage(content=system)] + _sanitize_messages(state["messages"])
@@ -117,12 +124,31 @@ async def retrieve(state: AgentState) -> dict:
         query_parts.append(intent.user_context)
     query = " ".join(p for p in query_parts if p)
 
-    product_ids = pinecone_search(
-        query=query,
-        category=intent.category,
-        max_budget=intent.max_budget,
-        top_k=8,
-    )
+    search_budget = intent.max_budget * 1.15 if intent.max_budget else None
+
+    if search_budget is None:
+        # No budget limit — fetch more results and pick a diverse price range
+        product_ids = pinecone_search(
+            query=query + " premium high-end best",
+            category=intent.category,
+            max_budget=None,
+            top_k=20,
+        )
+    else:
+        product_ids = pinecone_search(
+            query=query,
+            category=intent.category,
+            max_budget=search_budget,
+            top_k=8,
+        )
+
+        if not product_ids:
+            product_ids = pinecone_search(
+                query=query,
+                category=intent.category,
+                max_budget=None,
+                top_k=8,
+            )
 
     if not product_ids:
         return {"products": []}
@@ -133,10 +159,21 @@ async def retrieve(state: AgentState) -> dict:
     async with AsyncSessionLocal() as db:
         rows = await get_products_by_ids(db, product_ids)
 
+    if search_budget is None:
+        # No budget: sort by price descending to surface premium products first
+        rows.sort(key=lambda r: r.price, reverse=True)
+    else:
+        within_budget = []
+        slightly_over = []
+        for row in rows:
+            if intent.max_budget is not None and row.price > intent.max_budget:
+                slightly_over.append(row)
+                continue
+            within_budget.append(row)
+        rows = within_budget + slightly_over[:max(0, 3 - len(within_budget))]
+
     products = []
-    for row in rows:
-        if intent.max_budget is not None and row.price > intent.max_budget:
-            continue
+    for row in rows[:5]:
         products.append(
             ProductOut(
                 id=row.id,
@@ -153,7 +190,7 @@ async def retrieve(state: AgentState) -> dict:
             )
         )
 
-    return {"products": products[:5]}
+    return {"products": products}
 
 
 async def recommend(state: AgentState) -> dict:

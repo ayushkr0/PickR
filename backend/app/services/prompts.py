@@ -7,8 +7,16 @@ Analyze the FULL conversation and extract:
 
 message_type rules:
 - "product_request": user wants to buy something or is answering follow-up questions about a purchase
-- "question": user is asking about products, specs, tech, comparisons (e.g. "what's better, OLED or LCD?")
+- "question": user is asking about products, specs, tech, comparisons (e.g. "what's better, OLED or LCD?"), \
+OR the user is asking follow-up questions about products already recommended (e.g. "what are the other options?", \
+"show me more", "anything cheaper?", "compare the top two", "tell me more about that one"). \
+These are QUESTIONS, not new product requests — the user already has recommendations and wants to discuss them.
 - "general": greetings, thanks, off-topic, casual chat
+
+IMPORTANT: If the assistant has ALREADY recommended products in the conversation, and the user asks about those \
+products (comparisons, alternatives, more details, other options), classify as "question" NOT "product_request". \
+Only classify as "product_request" when the user is starting a genuinely NEW search (different category, \
+different requirements, or explicitly says "start over" / "new search").
 
 Field guidance:
 - category: "laptop", "headphone", or "camera" if the user has indicated one, otherwise null
@@ -33,11 +41,14 @@ Rules:
 - If they ask something outside your expertise, be honest about it
 - ALWAYS use £ (GBP) for any prices or budget references, never $
 
-CRITICAL — when comparing products:
+CRITICAL — when discussing previously recommended products:
 - You will be given PRODUCT DATA from previous recommendations. Use ONLY this data.
 - Reference each product by its ACTUAL name, price, and specs from the data provided.
 - NEVER fabricate or duplicate product details. Each product is distinct.
-- If the user asks to compare and you have product data, compare the REAL differences between them.
+- If the user asks to compare, compare the REAL differences between them.
+- If the user asks "what are the other options" or "show me more", discuss the OTHER products \
+from the recommendation list (not just the best pick). Highlight what makes each one different.
+- If the user asks for cheaper/premium options, filter the product data accordingly.
 - If you don't have product data, ask the user to request recommendations first.
 """
 
@@ -79,6 +90,9 @@ CRITICAL:
 - Use product_id values EXACTLY as given — do not make up IDs
 - ALWAYS use £ (GBP) for prices, never $
 - Tone: casual friend, not salesperson
+- If some products are slightly over the user's budget, you may still include them as alternatives — \
+just mention that they're a bit over budget but worth considering
+- ALWAYS include alternatives if more than one product is available — don't just recommend one
 """
 
 WHY_PICK_SYSTEM = """\
