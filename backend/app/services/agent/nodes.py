@@ -10,7 +10,9 @@ from app.services.prompts import (
     CONVERSATION_SYSTEM,
     FOLLOWUP_SYSTEM,
     INTENT_SYSTEM,
+    QUERY_EXPANSION_SYSTEM,
     RECOMMENDATION_SYSTEM,
+    RERANK_SYSTEM,
 )
 from app.services.vector_store import search_products as pinecone_search
 
@@ -116,39 +118,102 @@ async def follow_up(state: AgentState) -> dict:
     return {"messages": [response]}
 
 
+async def _expand_query(intent) -> str:
+    """Use LLM to translate user intent into spec-rich search terms."""
+    llm = _get_haiku()
+    user_request = f"Category: {intent.category or 'any'}, Use case: {intent.use_case or 'general'}"
+    if intent.max_budget:
+        user_request += f", Budget: £{intent.max_budget}"
+    else:
+        user_request += ", Budget: unlimited / no limit"
+    if intent.user_context:
+        user_request += f", User: {intent.user_context}"
+
+    messages = [
+        SystemMessage(content=QUERY_EXPANSION_SYSTEM),
+        HumanMessage(content=user_request),
+    ]
+    response = await llm.ainvoke(messages)
+    content = response.content
+    if isinstance(content, list):
+        content = "".join(
+            b.get("text", "") if isinstance(b, dict) else str(b)
+            for b in content
+        )
+    return str(content).strip()
+
+
+async def _rerank_products(intent, rows: list) -> list:
+    """Use LLM to score and re-rank products by relevance to user needs."""
+    if len(rows) <= 5:
+        return rows
+
+    import json
+    llm = _get_haiku()
+
+    products_text = "\n".join(
+        f"- id: {r.id} | {r.name} | £{r.price} | specs: {json.dumps(r.specs or {})}"
+        for r in rows
+    )
+    user_needs = f"Category: {intent.category}, Use case: {intent.use_case or 'general'}"
+    if intent.max_budget:
+        user_needs += f", Budget: £{intent.max_budget}"
+    else:
+        user_needs += ", Budget: unlimited"
+    if intent.user_context:
+        user_needs += f", User: {intent.user_context}"
+
+    messages = [
+        SystemMessage(content=RERANK_SYSTEM),
+        HumanMessage(content=f"User needs: {user_needs}\n\nProducts:\n{products_text}"),
+    ]
+    response = await llm.ainvoke(messages)
+    content = response.content
+    if isinstance(content, list):
+        content = "".join(
+            b.get("text", "") if isinstance(b, dict) else str(b)
+            for b in content
+        )
+
+    try:
+        text = str(content).strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        start = text.find("[")
+        end = text.rfind("]")
+        if start != -1 and end != -1:
+            text = text[start:end + 1]
+        scored = json.loads(text)
+        id_to_score = {item["id"]: item["score"] for item in scored}
+        rows.sort(key=lambda r: id_to_score.get(r.id, 0), reverse=True)
+    except (json.JSONDecodeError, KeyError, TypeError):
+        pass
+
+    return rows
+
+
 async def retrieve(state: AgentState) -> dict:
     intent = state["intent"]
 
-    query_parts = [intent.use_case or "", intent.category or ""]
-    if intent.user_context:
-        query_parts.append(intent.user_context)
-    query = " ".join(p for p in query_parts if p)
+    # Stage 1: LLM-powered query expansion
+    expanded_query = await _expand_query(intent)
 
     search_budget = intent.max_budget * 1.15 if intent.max_budget else None
 
-    if search_budget is None:
-        # No budget limit — fetch more results and pick a diverse price range
+    product_ids = pinecone_search(
+        query=expanded_query,
+        category=intent.category,
+        max_budget=search_budget,
+        top_k=15,
+    )
+
+    if not product_ids and search_budget is not None:
         product_ids = pinecone_search(
-            query=query + " premium high-end best",
+            query=expanded_query,
             category=intent.category,
             max_budget=None,
-            top_k=20,
+            top_k=15,
         )
-    else:
-        product_ids = pinecone_search(
-            query=query,
-            category=intent.category,
-            max_budget=search_budget,
-            top_k=8,
-        )
-
-        if not product_ids:
-            product_ids = pinecone_search(
-                query=query,
-                category=intent.category,
-                max_budget=None,
-                top_k=8,
-            )
 
     if not product_ids:
         return {"products": []}
@@ -159,17 +224,17 @@ async def retrieve(state: AgentState) -> dict:
     async with AsyncSessionLocal() as db:
         rows = await get_products_by_ids(db, product_ids)
 
-    if search_budget is None:
-        # No budget: sort by price descending to surface premium products first
-        rows.sort(key=lambda r: r.price, reverse=True)
-    else:
+    # Stage 2: LLM-powered re-ranking by spec relevance
+    rows = await _rerank_products(intent, rows)
+
+    if search_budget is not None and intent.max_budget is not None:
         within_budget = []
         slightly_over = []
         for row in rows:
-            if intent.max_budget is not None and row.price > intent.max_budget:
+            if row.price > intent.max_budget:
                 slightly_over.append(row)
-                continue
-            within_budget.append(row)
+            else:
+                within_budget.append(row)
         rows = within_budget + slightly_over[:max(0, 3 - len(within_budget))]
 
     products = []

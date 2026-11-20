@@ -25,7 +25,6 @@ def _route_after_intent(state: AgentState) -> str:
     ready = (
         intent.category is not None
         and intent.use_case is not None
-        and (intent.max_budget is not None or intent.user_context is not None)
     )
     if ready:
         return "retrieve"

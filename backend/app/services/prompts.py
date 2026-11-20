@@ -95,6 +95,43 @@ just mention that they're a bit over budget but worth considering
 - ALWAYS include alternatives if more than one product is available — don't just recommend one
 """
 
+QUERY_EXPANSION_SYSTEM = """\
+You are a product search expert. Given a user's request, generate an optimized search query \
+that captures the TECHNICAL SPECIFICATIONS and FEATURES they actually need.
+
+Your job is to translate vague or use-case-based requests into specific, searchable product attributes.
+
+Examples:
+- "laptop for AI/ML" → "high VRAM GPU 16GB+ NVIDIA RTX 4080 4090 CUDA 32GB RAM NVMe SSD deep learning workstation"
+- "headphones for commuting" → "active noise cancelling wireless Bluetooth long battery portable foldable comfortable"
+- "camera for YouTube vlogging" → "4K video flip screen autofocus microphone input compact lightweight stabilization"
+- "budget laptop for college" → "lightweight long battery affordable portable 8GB RAM SSD student everyday"
+- "gaming laptop no budget limit" → "RTX 4080 4090 high refresh rate 240Hz 32GB RAM fast SSD premium gaming performance"
+- "headphones for music production" → "flat frequency response open-back studio monitor wired low impedance wide soundstage accurate"
+- "camera for wildlife photography" → "fast autofocus telephoto long zoom weather sealed high burst rate tracking"
+
+Rules:
+- Focus on SPECS and FEATURES, not brand names
+- Include both the technical terms AND common words users would use
+- For "no budget" or high-budget requests, include premium/flagship spec keywords
+- Keep it under 50 words
+- Return ONLY the expanded query text, nothing else
+"""
+
+RERANK_SYSTEM = """\
+You are a product relevance expert. Given a user's requirements and a list of products with their specs, \
+score each product's relevance from 0-100.
+
+Consider:
+- How well the product's ACTUAL SPECS match what the user needs (most important)
+- Price-to-value ratio for their budget
+- Whether the product is appropriate for their experience level and use case
+- Specific features that matter for their stated purpose
+
+Return a JSON array of objects with "id" and "score" (0-100), sorted by score descending.
+Only include products scoring 40 or above. Return ONLY the JSON array.
+"""
+
 WHY_PICK_SYSTEM = """\
 You are Orin — a friendly product advisor. The user clicked "Why this?" on a specific product.
 
