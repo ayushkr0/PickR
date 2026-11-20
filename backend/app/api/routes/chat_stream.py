@@ -37,7 +37,9 @@ async def chat_stream(request: Request, body: ChatRequest, user: User | None = D
                 yield _sse(event["event"], event["data"])
 
         except Exception as e:
-            yield _sse("error", {"detail": str(e)})
+            import logging
+            logging.getLogger("pickr").exception("Stream error: %s", e)
+            yield _sse("error", {"detail": "Something went wrong. Please try again."})
 
     return StreamingResponse(
         event_generator(),

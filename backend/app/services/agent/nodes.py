@@ -27,6 +27,7 @@ def _sanitize_messages(messages: list) -> list:
             blocks = [
                 b for b in c
                 if not (isinstance(b, dict) and b.get("type") == "text" and not b.get("text"))
+                and not (isinstance(b, str) and not b.strip())
             ]
             if not blocks:
                 continue
@@ -84,7 +85,7 @@ async def converse(state: AgentState) -> dict:
     system = CONVERSATION_SYSTEM + product_context
     messages = [SystemMessage(content=system)] + _sanitize_messages(state["messages"])
     response = await llm.ainvoke(messages)
-    return {"messages": [response]}
+    return {"messages": [AIMessage(content=response.text)]}
 
 
 async def follow_up(state: AgentState) -> dict:
@@ -105,7 +106,7 @@ async def follow_up(state: AgentState) -> dict:
     llm = _get_haiku()
     messages = [SystemMessage(content=system)] + _sanitize_messages(state["messages"])
     response = await llm.ainvoke(messages)
-    return {"messages": [response]}
+    return {"messages": [AIMessage(content=response.text)]}
 
 
 async def retrieve(state: AgentState) -> dict:
@@ -249,7 +250,7 @@ async def fallback(state: AgentState) -> dict:
     ]
     response = await llm.ainvoke(messages)
 
-    products_out = [
+    products_out: list[ProductOut] = [
         ProductOut(
             id=p.get("id", p["name"]),
             name=p["name"],
@@ -266,4 +267,4 @@ async def fallback(state: AgentState) -> dict:
         for p in products
     ]
 
-    return {"messages": [response], "products": products_out}
+    return {"messages": [AIMessage(content=response.text)], "products": products_out}

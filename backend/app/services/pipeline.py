@@ -248,9 +248,11 @@ async def generate_why_pick(session_id: str, product_name: str) -> str:
         max_tokens=512,
     )
 
+    from app.services.agent.nodes import _sanitize_messages
+
     messages = [
         SystemMessage(content=WHY_PICK_SYSTEM),
-        *history,
+        *_sanitize_messages(history),
         HumanMessage(content=f"Why did you recommend the {product_name}?"),
     ]
 
