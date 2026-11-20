@@ -85,7 +85,7 @@ async def converse(state: AgentState) -> dict:
     system = CONVERSATION_SYSTEM + product_context
     messages = [SystemMessage(content=system)] + _sanitize_messages(state["messages"])
     response = await llm.ainvoke(messages)
-    return {"messages": [AIMessage(content=response.text)]}
+    return {"messages": [response]}
 
 
 async def follow_up(state: AgentState) -> dict:
@@ -106,7 +106,7 @@ async def follow_up(state: AgentState) -> dict:
     llm = _get_haiku()
     messages = [SystemMessage(content=system)] + _sanitize_messages(state["messages"])
     response = await llm.ainvoke(messages)
-    return {"messages": [AIMessage(content=response.text)]}
+    return {"messages": [response]}
 
 
 async def retrieve(state: AgentState) -> dict:
@@ -267,4 +267,4 @@ async def fallback(state: AgentState) -> dict:
         for p in products
     ]
 
-    return {"messages": [AIMessage(content=response.text)], "products": products_out}
+    return {"messages": [response], "products": products_out}

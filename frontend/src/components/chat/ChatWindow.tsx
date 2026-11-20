@@ -192,18 +192,13 @@ function QuickReplies({ messages, stage, onSelect, disabled }: { messages: Messa
 
 export default function ChatWindow() {
   const [messages, setMessages] = useState<MessageType[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    try { return sessionStorage.getItem("pickr_session_id"); } catch { return null; }
-  });
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [streamPhase, setStreamPhase] = useState<string | null>(null);
   const [expectProducts, setExpectProducts] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasInteracted, setHasInteracted] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try { return sessionStorage.getItem("pickr_session_id") !== null; } catch { return false; }
-  });
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [whyLoading, setWhyLoading] = useState<string | null>(null);
   const [whyModal, setWhyModal] = useState<{ product: Product; explanation: string | null } | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
@@ -215,36 +210,42 @@ export default function ChatWindow() {
   const userScrolledUp = useRef(false);
   const { toast } = useToast();
 
+  // Hydrate from sessionStorage on mount (avoids SSR mismatch)
+  useEffect(() => {
+    try {
+      const sid = sessionStorage.getItem("pickr_session_id");
+      if (sid) {
+        setSessionId(sid);
+        setHasInteracted(true);
+        setRestoring(true);
+        fetchSessionMessages(sid)
+          .then((data) => {
+            const loaded: MessageType[] = data.messages.map((m) => ({
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            }));
+            setMessages([WELCOME_MESSAGE, ...loaded]);
+          })
+          .catch(() => {
+            try { sessionStorage.removeItem("pickr_session_id"); } catch {}
+            setSessionId(null);
+            setHasInteracted(false);
+          })
+          .finally(() => setRestoring(false));
+      }
+    } catch {}
+    setHydrated(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Persist sessionId to sessionStorage
   useEffect(() => {
+    if (!hydrated) return;
     try {
       if (sessionId) sessionStorage.setItem("pickr_session_id", sessionId);
       else sessionStorage.removeItem("pickr_session_id");
     } catch {}
-  }, [sessionId]);
-
-  // Restore session on mount
-  useEffect(() => {
-    const sid = (() => { try { return sessionStorage.getItem("pickr_session_id"); } catch { return null; } })();
-    if (sid && messages.length === 0 && hasInteracted) {
-      setRestoring(true);
-      fetchSessionMessages(sid)
-        .then((data) => {
-          const loaded: MessageType[] = data.messages.map((m) => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          }));
-          setMessages([WELCOME_MESSAGE, ...loaded]);
-        })
-        .catch(() => {
-          try { sessionStorage.removeItem("pickr_session_id"); } catch {}
-          setSessionId(null);
-          setHasInteracted(false);
-        })
-        .finally(() => setRestoring(false));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sessionId, hydrated]);
 
   // Smart scroll: only auto-scroll when user is near the bottom
   useEffect(() => {
