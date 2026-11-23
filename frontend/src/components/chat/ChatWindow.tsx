@@ -250,7 +250,12 @@ export default function ChatWindow() {
   // Smart scroll: only auto-scroll when user is near the bottom
   useEffect(() => {
     if (!userScrolledUp.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      const el = scrollContainerRef.current;
+      if (el) {
+        requestAnimationFrame(() => {
+          el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+        });
+      }
     }
   }, [messages, loading]);
 
@@ -450,7 +455,7 @@ export default function ChatWindow() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
-      className="flex h-full w-full"
+      className="flex h-full w-full overflow-hidden"
     >
       <ChatSidebar
         open={sidebarOpen}

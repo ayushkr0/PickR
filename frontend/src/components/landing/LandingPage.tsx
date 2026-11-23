@@ -200,7 +200,7 @@ export default function LandingPage({ onStart }: Props) {
   const heroY = useTransform(scrollYProgress, [0, 0.8], [0, -50]);
 
   return (
-    <div className="w-full bg-bg-primary transition-colors duration-300">
+    <div className="w-full h-full overflow-y-auto bg-bg-primary transition-colors duration-300">
       {/* ── Nav ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
