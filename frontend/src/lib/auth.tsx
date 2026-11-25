@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { trackEvent } from "@/lib/pendo";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -43,6 +44,14 @@ export function getAuthHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function hasActiveChatSession(): boolean {
+  try {
+    return sessionStorage.getItem("pickr_session_id") !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -51,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem("pickr_token");
     if (!stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
@@ -81,6 +91,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("pickr_token", data.token);
     setToken(data.token);
     setUser(data.user);
+    // Pendo: sign-in succeeded
+    trackEvent("sign_in_completed", {
+      user_id: data.user?.id ?? null,
+      is_admin: Boolean(data.user?.is_admin),
+      had_active_session: hasActiveChatSession(),
+    });
   }, []);
 
   const register = useCallback(async (email: string, password: string, displayName?: string, honeypot?: string) => {
@@ -97,6 +113,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("pickr_token", data.token);
     setToken(data.token);
     setUser(data.user);
+    // Pendo: account registration succeeded
+    trackEvent("account_registered", {
+      user_id: data.user?.id ?? null,
+      has_display_name: Boolean(data.user?.display_name),
+      had_active_session: hasActiveChatSession(),
+    });
   }, []);
 
   const logout = useCallback(() => {
