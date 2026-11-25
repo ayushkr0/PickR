@@ -1,6 +1,7 @@
 import json
 import uuid
 
+import pendo_sdk
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from slowapi import Limiter
@@ -30,6 +31,11 @@ async def chat_stream(request: Request, body: ChatRequest, user: User | None = D
     session_id = body.session_id or str(uuid.uuid4())
 
     async def event_generator():
+        pendo_sdk.set_identity(
+            visitor_id=user.id if user else None,  # TODO: map to the visitor id your Pendo web snippet uses
+            account_id=None,  # TODO: map to the Pendo account id for this user
+            conversation_id=session_id,  # TODO: confirm the chat session id is the conversation id to report
+        )
         try:
             from app.services.pipeline import run_pipeline_stream
 
@@ -40,6 +46,8 @@ async def chat_stream(request: Request, body: ChatRequest, user: User | None = D
             import logging
             logging.getLogger("pickr").exception("Stream error: %s", e)
             yield _sse("error", {"detail": "Something went wrong. Please try again."})
+        finally:
+            pendo_sdk.close_turn(session_id)
 
     return StreamingResponse(
         event_generator(),
