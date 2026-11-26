@@ -1,3 +1,6 @@
+import re
+
+from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 
 from app.services.agent.nodes import (
@@ -13,6 +16,26 @@ from app.services.agent.state import AgentState
 
 _compiled = None
 
+_FOLLOWUP_RE = re.compile(
+    r"compare|versus|vs\.?|difference|which one|which is better|tell me more"
+    r"|other options|alternatives|cheaper|more premium|top two|top 2"
+    r"|first one|second one|third one|between them|pros and cons",
+    re.IGNORECASE,
+)
+
+
+def _is_followup_about_products(state: AgentState) -> bool:
+    """True when the user is asking about products already recommended."""
+    if not state.get("products"):
+        return False
+    msgs = state.get("messages", [])
+    last_human = ""
+    for m in reversed(msgs):
+        if isinstance(m, HumanMessage):
+            last_human = m.content if isinstance(m.content, str) else str(m.content)
+            break
+    return bool(_FOLLOWUP_RE.search(last_human))
+
 
 def _route_after_intent(state: AgentState) -> str:
     intent = state["intent"]
@@ -20,6 +43,9 @@ def _route_after_intent(state: AgentState) -> str:
         return "converse"
 
     if intent.message_type in ("question", "general"):
+        return "converse"
+
+    if intent.message_type == "product_request" and _is_followup_about_products(state):
         return "converse"
 
     ready = (

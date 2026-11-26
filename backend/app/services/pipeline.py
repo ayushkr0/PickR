@@ -146,33 +146,40 @@ async def run_pipeline_stream(session_id: str, message: str, user_id: str | None
     accumulated: dict = {}
     full_reply_parts: list[str] = []
 
-    async for mode, chunk in graph.astream(
-        input_state, config=config, stream_mode=["messages", "updates"]
-    ):
-        if mode == "messages":
-            msg_chunk, metadata = chunk
-            node = metadata.get("langgraph_node", "")
-            if node in text_nodes:
-                content = getattr(msg_chunk, "content", "")
-                if isinstance(content, str) and content:
-                    full_reply_parts.append(content)
-                    yield {"event": "token", "data": {"text": content}}
-                elif isinstance(content, list):
-                    text = "".join(
-                        b.get("text", "") if isinstance(b, dict) else str(b)
-                        for b in content
-                    )
-                    if text:
-                        full_reply_parts.append(text)
-                        yield {"event": "token", "data": {"text": text}}
+    try:
+        async for mode, chunk in graph.astream(
+            input_state, config=config, stream_mode=["messages", "updates"]
+        ):
+            if mode == "messages":
+                msg_chunk, metadata = chunk
+                node = metadata.get("langgraph_node", "")
+                if node in text_nodes:
+                    content = getattr(msg_chunk, "content", "")
+                    if isinstance(content, str) and content:
+                        full_reply_parts.append(content)
+                        yield {"event": "token", "data": {"text": content}}
+                    elif isinstance(content, list):
+                        text = "".join(
+                            b.get("text", "") if isinstance(b, dict) else str(b)
+                            for b in content
+                        )
+                        if text:
+                            full_reply_parts.append(text)
+                            yield {"event": "token", "data": {"text": text}}
 
-        elif mode == "updates":
-            for node_name, update in chunk.items():
-                if node_name == "__end__":
-                    continue
-                if isinstance(update, dict):
-                    accumulated.update(update)
-                yield {"event": "node", "data": {"node": node_name, "status": "completed"}}
+            elif mode == "updates":
+                for node_name, update in chunk.items():
+                    if node_name == "__end__":
+                        continue
+                    if isinstance(update, dict):
+                        accumulated.update(update)
+                    yield {"event": "node", "data": {"node": node_name, "status": "completed"}}
+    except Exception as e:
+        import logging
+        logging.getLogger("pickr").exception("Graph stream error: %s", e)
+        yield {"event": "error", "data": {"detail": "Something went wrong. Please try again."}}
+        yield {"event": "done", "data": {"session_id": session_id}}
+        return
 
     recommendation = accumulated.get("recommendation")
     products: list[ProductOut] = accumulated.get("products", [])
