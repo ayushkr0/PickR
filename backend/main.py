@@ -1,14 +1,24 @@
+import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
+import pendo_sdk
 
-from app.api.routes import api_router
-from app.core.config import settings
+pendo_sdk.init(
+    api_key="0baac2a1-cf90-4f34-adad-f254d4333529",
+    agent_id="8YEAeT5ayroz6gIqiNABZMiFFWU",
+    endpoint="https://app.pendo.io",
+    auto_patch=True,
+)
+
+from fastapi import FastAPI, Request  # noqa: E402  imported after pendo_sdk.init on purpose
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from slowapi import Limiter  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from slowapi.util import get_remote_address  # noqa: E402
+
+from app.api.routes import api_router  # noqa: E402
+from app.core.config import settings  # noqa: E402
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -48,6 +58,7 @@ async def lifespan(app: FastAPI):
                 )
             """))
     yield
+    await asyncio.to_thread(pendo_sdk.shutdown)
 
 
 app = FastAPI(

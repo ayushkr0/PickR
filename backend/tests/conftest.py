@@ -1,4 +1,8 @@
-import pytest
+import os
+
+os.environ.setdefault("PENDO_DISABLED", "true")
+
+import pytest  # noqa: E402
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.schemas import ProductOut
