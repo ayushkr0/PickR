@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import type { Product } from "@/types";
 import { useWishlist } from "@/lib/wishlist";
 import { useToast } from "@/components/ui/Toast";
+import { trackEvent } from "@/lib/pendo";
 
 const CATEGORY_EMOJI: Record<string, string> = {
   laptop: "\uD83D\uDCBB",
@@ -20,7 +21,7 @@ interface Props {
 }
 
 export default function ProductCard({ product, index = 0, isBestPick = false, onWhyThisPick }: Props) {
-  const { toggleProduct, isProductSaved } = useWishlist();
+  const { savedProducts, toggleProduct, isProductSaved } = useWishlist();
   const { toast } = useToast();
   const saved = isProductSaved(product.id);
   const [imgError, setImgError] = useState(false);
@@ -90,6 +91,15 @@ export default function ProductCard({ product, index = 0, isBestPick = false, on
             e.stopPropagation();
             const wasSaved = isProductSaved(product.id);
             toggleProduct(product);
+            // Pendo: product saved to or removed from the wishlist
+            trackEvent("wishlist_product_toggled", {
+              action: wasSaved ? "removed" : "saved",
+              product_id: product.id,
+              product_category: product.category,
+              product_brand: product.brand,
+              product_price: product.price,
+              wishlist_count: wasSaved ? Math.max(savedProducts.length - 1, 0) : savedProducts.length + 1,
+            });
             toast(wasSaved ? `Removed ${product.name}` : `Saved ${product.name}`, wasSaved ? "info" : "success");
           }}
           className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg bg-bg-elevated/90 backdrop-blur-sm border border-border hover:border-border-dark transition-colors cursor-pointer z-10 shadow-[var(--shadow-xs)]"
@@ -155,6 +165,17 @@ export default function ProductCard({ product, index = 0, isBestPick = false, on
           )}
           {product.affiliate_url && (
             <a href={product.affiliate_url} target="_blank" rel="noopener noreferrer"
+              onClick={() => {
+                // Pendo: visitor opened the affiliate retailer link
+                trackEvent("retailer_link_opened", {
+                  product_id: product.id,
+                  product_category: product.category,
+                  product_brand: product.brand,
+                  product_price: product.price,
+                  is_best_pick: isBestPick,
+                  card_index: index,
+                });
+              }}
               className={`${onWhyThisPick ? "flex-1" : "w-full"} flex items-center justify-center gap-2 text-xs font-semibold text-white bg-accent hover:bg-accent-hover active:scale-[0.98] transition-all duration-200 rounded-lg py-2 shadow-[var(--shadow-glow)]`}>
               View Deal
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17l9.2-9.2M17 17V7.8H7.8" /></svg>

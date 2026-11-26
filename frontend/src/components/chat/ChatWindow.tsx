@@ -18,6 +18,7 @@ import JourneyTracker from "./JourneyTracker";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/components/ui/Toast";
 import { fetchSessionMessages } from "@/lib/sessions";
+import { trackEvent } from "@/lib/pendo";
 
 function getContextualReplies(messages: MessageType[], stage?: string): string[] {
   const userTexts = messages.filter((m) => m.role === "user").map((m) => m.content.toLowerCase());
@@ -293,10 +294,17 @@ export default function ChatWindow() {
     setStreamPhase("Orin is thinking...");
 
     const streamIdx = { current: -1 };
+    // Pendo tracking context for this reply
+    const isNewSession = !sessionId;
+    const priorMessageCount = hasInteracted ? messages.length : 1;
+    let replyStage: string | null = null;
+    let replyLength = 0;
+    let replyProductCount = 0;
 
     try {
       await streamMessage(text, sessionId, {
         onToken(token) {
+          replyLength += (token ?? "").length;
           setMessages((prev) => {
             const msgs = [...prev];
             if (streamIdx.current === -1) {
@@ -338,8 +346,23 @@ export default function ChatWindow() {
             }
             return msgs;
           });
+          replyProductCount = products.length;
+          // Pendo: the agent returned a set of product recommendations
+          const bestPick = products[bestPickIndex] ?? products[0];
+          const prices = products.map((p) => p.price);
+          trackEvent("recommendations_delivered", {
+            session_id: sessionId,
+            product_count: products.length,
+            best_pick_index: bestPickIndex,
+            best_pick_product_id: bestPick?.id ?? null,
+            category: bestPick?.category ?? null,
+            min_price: prices.length > 0 ? Math.min(...prices) : null,
+            max_price: prices.length > 0 ? Math.max(...prices) : null,
+            is_new_session: isNewSession,
+          });
         },
         onStage(stage) {
+          replyStage = stage;
           setMessages((prev) => {
             const msgs = [...prev];
             if (streamIdx.current >= 0) {
@@ -361,13 +384,37 @@ export default function ChatWindow() {
             }
             return msgs;
           });
+          // Pendo: the assistant finished streaming its reply
+          trackEvent("chat_response_completed", {
+            session_id: sid ?? sessionId,
+            stage: replyStage,
+            is_new_session: isNewSession,
+            response_length: replyLength,
+            has_products: replyProductCount > 0,
+            message_count: priorMessageCount + 1 + (streamIdx.current >= 0 ? 1 : 0),
+          });
         },
         onError(detail) {
           setError(detail);
+          // Pendo: the chat stream returned an error event
+          trackEvent("chat_response_failed", {
+            session_id: sessionId,
+            error_detail: String(detail ?? "").slice(0, 200),
+            error_source: "stream",
+            stage: replyStage,
+          });
         },
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      const errorMessage = err instanceof Error ? err.message : "Something went wrong.";
+      setError(errorMessage);
+      // Pendo: the chat request threw before or during streaming
+      trackEvent("chat_response_failed", {
+        session_id: sessionId,
+        error_detail: errorMessage.slice(0, 200),
+        error_source: "request",
+        stage: replyStage,
+      });
     } finally {
       setLoading(false);
       setStreamPhase(null);
@@ -382,6 +429,16 @@ export default function ChatWindow() {
     const cached = whyCacheRef.current.get(product.id);
     if (cached) {
       setWhyModal({ product, explanation: cached });
+      // Pendo: explanation served from the cache
+      trackEvent("why_this_pick_explanation_loaded", {
+        session_id: sessionId,
+        product_id: product.id,
+        product_category: product.category,
+        product_brand: product.brand,
+        product_price: product.price,
+        from_cache: true,
+        success: true,
+      });
       return;
     }
 
@@ -391,7 +448,26 @@ export default function ChatWindow() {
       const explanation = await whyThisPick(sessionId, product.name);
       whyCacheRef.current.set(product.id, explanation);
       setWhyModal({ product, explanation });
+      // Pendo: explanation loaded from the API
+      trackEvent("why_this_pick_explanation_loaded", {
+        session_id: sessionId,
+        product_id: product.id,
+        product_category: product.category,
+        product_brand: product.brand,
+        product_price: product.price,
+        from_cache: false,
+        success: true,
+      });
     } catch {
+      trackEvent("why_this_pick_explanation_loaded", {
+        session_id: sessionId,
+        product_id: product.id,
+        product_category: product.category,
+        product_brand: product.brand,
+        product_price: product.price,
+        from_cache: false,
+        success: false,
+      });
       toast("Couldn't get explanation. Try again.", "error");
       setWhyModal(null);
     } finally {
@@ -426,7 +502,20 @@ export default function ChatWindow() {
       setMessages(loaded);
       setError(null);
       setHasInteracted(true);
+      // Pendo: a past conversation loaded from chat history
+      trackEvent("chat_history_session_loaded", {
+        session_id: sid,
+        category: data.category ?? null,
+        message_count: loaded.length,
+        success: true,
+      });
     } catch {
+      trackEvent("chat_history_session_loaded", {
+        session_id: sid,
+        category: null,
+        message_count: 0,
+        success: false,
+      });
       toast("Couldn't load session", "error");
     }
   }
