@@ -9,6 +9,7 @@ interface AuthUser {
   email: string;
   display_name: string | null;
   is_admin: boolean;
+  created_at: string | null;
 }
 
 interface AuthContextType {
@@ -48,9 +49,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Register the signed-in visitor with Pendo whenever the user changes:
+  // after login, after registration, and after token hydration via /api/auth/me.
+  useEffect(() => {
+    if (!user || typeof pendo === "undefined") return;
+    pendo.identify({
+      visitor: {
+        id: user.id,
+        email: user.email,
+        full_name: user.display_name,
+        is_admin: user.is_admin,
+        created_at: user.created_at,
+      },
+    });
+  }, [user]);
+
   useEffect(() => {
     const stored = localStorage.getItem("pickr_token");
     if (!stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-existing hydration pattern, unchanged by the Pendo install
       setLoading(false);
       return;
     }
@@ -103,6 +120,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("pickr_token");
     setToken(null);
     setUser(null);
+    // Reset Pendo to a fresh anonymous visitor so the next person on this
+    // browser isn't tracked as the previous user. clearSession isn't part of
+    // the install stub, so it only exists once the agent has loaded.
+    if (typeof pendo !== "undefined" && typeof pendo.clearSession === "function") {
+      pendo.clearSession();
+    }
   }, []);
 
   return (

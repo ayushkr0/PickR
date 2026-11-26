@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
@@ -32,6 +34,22 @@ class UserOut(BaseModel):
     email: str
     display_name: str | None
     is_admin: bool
+    created_at: datetime | None = None
+
+
+def _user_out(user: User) -> UserOut:
+    # created_at is stored as a naive UTC timestamp, so mark it as UTC to
+    # serialize it as an ISO 8601 string with an explicit offset.
+    created_at = user.created_at
+    if created_at is not None and created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        is_admin=user.is_admin,
+        created_at=created_at,
+    )
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -57,7 +75,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
     return AuthResponse(
         token=create_token(user.id),
-        user=UserOut(id=user.id, email=user.email, display_name=user.display_name, is_admin=user.is_admin),
+        user=_user_out(user),
     )
 
 
@@ -70,10 +88,10 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     return AuthResponse(
         token=create_token(user.id),
-        user=UserOut(id=user.id, email=user.email, display_name=user.display_name, is_admin=user.is_admin),
+        user=_user_out(user),
     )
 
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)):
-    return UserOut(id=user.id, email=user.email, display_name=user.display_name, is_admin=user.is_admin)
+    return _user_out(user)
